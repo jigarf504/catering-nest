@@ -1,0 +1,48 @@
+// Prisma schema for MongoDB (Prisma v6)
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  password     String
+  firstName    String
+  lastName     String
+  role         Role     @default(USER)
+  refreshToken String?  // Hashed refresh token for token rotation
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+model Category {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  name_en    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SubCategory {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  category_id  String   @db.ObjectId
+  name       String
+  name_en    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
