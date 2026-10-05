@@ -13,6 +13,7 @@ import {
 import { SubCategoryService } from './sub-category.service';
 import { CreateSubCategoryDto } from './dto/create-sub-category.dto';
 import { UpdateSubCategoryDto } from './dto/update-sub-category.dto';
+import { BulkImportSubCategoryDto } from './dto/bulk-import-sub-category.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 
@@ -29,6 +30,17 @@ export class SubCategoryController {
     @HttpCode(HttpStatus.CREATED)
     create(@Body() createSubCategoryDto: CreateSubCategoryDto) {
         return this.subCategoryService.create(createSubCategoryDto);
+    }
+
+    /**
+     * POST /api/sub-categories/bulk
+     * Admin-only: bulk-import sub-categories. Skips duplicates.
+     */
+    @Post('bulk')
+    @Roles(Role.ADMIN)
+    @HttpCode(HttpStatus.CREATED)
+    bulkImport(@Body() dto: BulkImportSubCategoryDto) {
+        return this.subCategoryService.bulkImport(dto.subCategories);
     }
 
     /**

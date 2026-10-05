@@ -177,6 +177,79 @@ export class SubCategoryService {
     }
 
     /**
+     * Bulk-import sub-categories under a single parent category.
+     * Skips duplicates (case-insensitive on `name_en`) both within the batch
+     * and against existing records in the same category.
+     */
+    async bulkImport(items: { category_id: string; name: string; name_en: string }[]) {
+        if (items.length === 0) {
+            throw new BadRequestException('Items array must not be empty');
+        }
+
+        // All items must share the same category_id
+        const categoryId = items[0].category_id;
+
+        // Validate parent category exists
+        this.validateObjectId(categoryId);
+        const parentCategory = await this.prisma.category.findUnique({
+            where: { id: categoryId },
+        });
+
+        if (!parentCategory) {
+            throw new NotFoundException(
+                `Category with ID "${categoryId}" not found`,
+            );
+        }
+
+        // 1. Deduplicate within the incoming batch (keep first occurrence)
+        const seen = new Set<string>();
+        const uniqueItems = items.filter((item) => {
+            const key = item.name_en.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        // 2. Fetch existing sub-category names in this category
+        const existingSubCategories = await this.prisma.subCategory.findMany({
+            where: { category_id: categoryId },
+            select: { name_en: true },
+        });
+        const existingNames = new Set(
+            existingSubCategories.map((sc) => sc.name_en.toLowerCase()),
+        );
+
+        // 3. Separate new vs. skipped
+        const toCreate: { category_id: string; name: string; name_en: string }[] = [];
+        const skippedNames: string[] = [];
+
+        for (const item of uniqueItems) {
+            if (existingNames.has(item.name_en.toLowerCase())) {
+                skippedNames.push(item.name_en);
+            } else {
+                toCreate.push({
+                    category_id: categoryId,
+                    name: item.name,
+                    name_en: item.name_en,
+                });
+            }
+        }
+
+        // 4. Bulk insert
+        if (toCreate.length > 0) {
+            await this.prisma.subCategory.createMany({
+                data: toCreate,
+            });
+        }
+
+        return {
+            created: toCreate.length,
+            skipped: skippedNames.length,
+            skippedNames,
+        };
+    }
+
+    /**
      * Validates that a string is a valid MongoDB ObjectId (24-char hex).
      */
     private validateObjectId(id: string): void {
