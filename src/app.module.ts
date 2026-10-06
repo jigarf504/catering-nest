@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { CategoryModule } from './category/category.module';
 import { SubCategoryModule } from './sub-category/sub-category.module';
+import { OrderModule } from './order/order.module';
 import { AccessTokenGuard } from './auth/guards/access-token.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -18,6 +19,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     AuthModule,
     CategoryModule,
     SubCategoryModule,
+    OrderModule,
   ],
   providers: [
     // Global JWT guard — all routes require auth by default

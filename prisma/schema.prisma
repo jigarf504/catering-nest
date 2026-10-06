@@ -45,4 +45,66 @@ model SubCategory {
   updatedAt    DateTime @updatedAt
 }
 
+enum OrderStatus {
+  NEW
+  PARTIAL_PAID
+  PAID
+}
 
+enum PaymentMode {
+  CASH
+  UPI
+  CHEQUE
+}
+
+model Order {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceNumber String         @unique
+  customerName  String
+  customerPhone String?
+  items         OrderItem[]
+  subTotal      Float
+  cgstRate      Float          @default(0)
+  sgstRate      Float          @default(0)
+  cgstAmount    Float          @default(0)
+  sgstAmount    Float          @default(0)
+  totalAmount   Float
+  paidAmount    Float          @default(0)
+  status        OrderStatus    @default(NEW)
+  payments      Payment[]
+  history       OrderHistory[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model OrderItem {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  order_id    String @db.ObjectId
+  order       Order  @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  description String
+  qty         Float
+  rate        Float
+  amount      Float
+}
+
+model Payment {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  order_id     String      @db.ObjectId
+  order        Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  amount       Float
+  mode         PaymentMode
+  chequeNumber String?
+  chequeDate   String?
+  chequeBank   String?
+  note         String?
+  createdAt    DateTime    @default(now())
+}
+
+model OrderHistory {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  order_id    String   @db.ObjectId
+  order       Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  action      String
+  description String
+  createdAt   DateTime @default(now())
+}
