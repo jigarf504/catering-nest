@@ -9,6 +9,7 @@ import { SubCategoryModule } from './sub-category/sub-category.module';
 import { OrderModule } from './order/order.module';
 import { AccessTokenGuard } from './auth/guards/access-token.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
+import { CustomersModule } from './customers/customers.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     CategoryModule,
     SubCategoryModule,
     OrderModule,
+    CustomersModule,
   ],
   providers: [
     // Global JWT guard — all routes require auth by default

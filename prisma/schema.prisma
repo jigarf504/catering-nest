@@ -45,6 +45,21 @@ model SubCategory {
   updatedAt    DateTime @updatedAt
 }
 
+
+model Customer {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  customer_id    String   @unique
+  name           String
+  address        String
+  mobile_number  String
+  mobile_number_2 String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  // One customer can have multiple orders
+  orders          Order[]
+}
+
 enum OrderStatus {
   NEW
   PARTIAL_PAID
@@ -60,22 +75,30 @@ enum PaymentMode {
 model Order {
   id            String         @id @default(auto()) @map("_id") @db.ObjectId
   invoiceNumber String         @unique
-  customerName  String
-  customerPhone String?
+
+  // Customer relation
+  customerId    String         @db.ObjectId
+  customer      Customer       @relation(fields: [customerId], references: [id])
+
   items         OrderItem[]
+
   subTotal      Float
   cgstRate      Float          @default(0)
   sgstRate      Float          @default(0)
   cgstAmount    Float          @default(0)
   sgstAmount    Float          @default(0)
   totalAmount   Float
+
   paidAmount    Float          @default(0)
   status        OrderStatus    @default(NEW)
+
   payments      Payment[]
   history       OrderHistory[]
+
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
+
 
 model OrderItem {
   id          String @id @default(auto()) @map("_id") @db.ObjectId
@@ -108,3 +131,6 @@ model OrderHistory {
   description String
   createdAt   DateTime @default(now())
 }
+
+
+
