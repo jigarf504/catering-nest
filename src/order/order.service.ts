@@ -83,8 +83,8 @@ export class OrderService {
         const order = await this.prisma.order.create({
             data: {
                 invoiceNumber,
-                customerName: dto.customerName,
-                customerPhone: dto.customerPhone,
+                customerId: dto.customerId,
+                //customerPhone: dto.customerPhone,
                 subTotal,
                 cgstRate,
                 sgstRate,
@@ -187,8 +187,8 @@ export class OrderService {
         const status = this.resolveStatus(existing.paidAmount, totalAmount);
 
         const changes: string[] = [];
-        if (dto.customerName && dto.customerName !== existing.customerName)
-            changes.push(`Customer: ${existing.customerName} → ${dto.customerName}`);
+        if (dto.customerId && dto.customerId !== existing.customerId)
+            changes.push(`Customer: ${existing.customerId} → ${dto.customerId}`);
         if (dto.items) changes.push(`Items updated (${dto.items.length} items)`);
         if (dto.cgstRate !== undefined && dto.cgstRate !== existing.cgstRate)
             changes.push(`CGST: ${existing.cgstRate}% → ${dto.cgstRate}%`);
@@ -198,8 +198,8 @@ export class OrderService {
             changes.push(`Total: ₹${existing.totalAmount} → ₹${totalAmount}`);
 
         const updateData: any = {
-            customerName: dto.customerName ?? existing.customerName,
-            customerPhone: dto.customerPhone !== undefined ? dto.customerPhone : existing.customerPhone,
+            customerId: dto.customerId ?? existing.customerId,
+            customerPhone: dto.customerId !== undefined ? dto.customerId : existing.customerId,
             subTotal,
             cgstRate,
             sgstRate,
