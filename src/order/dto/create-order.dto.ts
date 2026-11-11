@@ -33,6 +33,26 @@ export class CreateOrderDto {
     @IsNotEmpty()
     customerId: string;
 
+    @IsString()
+    @IsOptional()
+    @MaxLength(200)
+    customerName?: string;
+
+    @IsString()
+    @IsOptional()
+    @MaxLength(50)
+    mobile?: string;
+
+    @IsString()
+    @IsOptional()
+    @MaxLength(50)
+    mobile2?: string;
+
+    @IsString()
+    @IsOptional()
+    @MaxLength(1000)
+    address?: string;
+
     @IsArray()
     @ValidateNested({ each: true })
     @Type(() => CreateOrderItemDto)

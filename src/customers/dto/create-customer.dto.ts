@@ -5,6 +5,7 @@ import {
     IsString,
     Length,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateCustomerDto {
     @IsString()
@@ -27,7 +28,8 @@ export class CreateCustomerDto {
     @IsOptional()
     @IsString()
     @Length(7, 20)
-    mobile_number_2?: string;
+    @Transform(({ value }) => value === '' ? null : value)
+    mobile_number_2?: string | null;
 
     @IsOptional()
     @IsBoolean()

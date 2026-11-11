@@ -78,7 +78,11 @@ model Order {
 
   // Customer relation
   customerId    String         @db.ObjectId
-  customer      Customer       @relation(fields: [customerId], references: [id])
+  customer      Customer?       @relation(fields: [customerId], references: [id])
+  customerName  String?
+  mobile        String?
+  mobile2       String?
+  address       String?
 
   items         OrderItem[]
 

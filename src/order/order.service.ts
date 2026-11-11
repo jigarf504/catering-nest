@@ -71,6 +71,15 @@ export class OrderService {
      */
     async create(dto: CreateOrderDto) {
         const invoiceNumber = await this.generateInvoiceNumber();
+
+        // Validate customer exists
+        const customer = await this.prisma.customer.findUnique({
+            where: { id: dto.customerId },
+        });
+        if (!customer) {
+            throw new NotFoundException(`Customer with ID "${dto.customerId}" not found`);
+        }
+
         const cgstRate = dto.cgstRate ?? 0;
         const sgstRate = dto.sgstRate ?? 0;
 
@@ -84,7 +93,10 @@ export class OrderService {
             data: {
                 invoiceNumber,
                 customerId: dto.customerId,
-                //customerPhone: dto.customerPhone,
+                customerName: dto.customerName ?? customer.name,
+                mobile: dto.mobile ?? customer.mobile_number,
+                mobile2: dto.mobile2 ?? customer.mobile_number_2,
+                address: dto.address ?? customer.address,
                 subTotal,
                 cgstRate,
                 sgstRate,
@@ -108,7 +120,7 @@ export class OrderService {
                     },
                 },
             },
-            include: { items: true, payments: true, history: true },
+            include: { customer: true, items: true, payments: true, history: true },
         });
 
         return order;
@@ -120,7 +132,7 @@ export class OrderService {
     async findAll() {
         return this.prisma.order.findMany({
             orderBy: { createdAt: 'desc' },
-            include: { items: true, payments: true },
+            include: { items: true, payments: true, customer: true },
         });
     }
 
@@ -133,6 +145,7 @@ export class OrderService {
         const order = await this.prisma.order.findUnique({
             where: { id },
             include: {
+                customer: true,
                 items: true,
                 payments: { orderBy: { createdAt: 'desc' } },
                 history: { orderBy: { createdAt: 'desc' } },
@@ -160,6 +173,16 @@ export class OrderService {
 
         if (!existing) {
             throw new NotFoundException(`Order with ID "${id}" not found`);
+        }
+
+        // Validate customer exists if customerId is being changed
+        if (dto.customerId) {
+            const customer = await this.prisma.customer.findUnique({
+                where: { id: dto.customerId },
+            });
+            if (!customer) {
+                throw new NotFoundException(`Customer with ID "${dto.customerId}" not found`);
+            }
         }
 
         const cgstRate = dto.cgstRate ?? existing.cgstRate;
@@ -199,7 +222,10 @@ export class OrderService {
 
         const updateData: any = {
             customerId: dto.customerId ?? existing.customerId,
-            customerPhone: dto.customerId !== undefined ? dto.customerId : existing.customerId,
+            customerName: dto.customerName ?? existing.customerName,
+            mobile: dto.mobile ?? existing.mobile,
+            mobile2: dto.mobile2 ?? existing.mobile2,
+            address: dto.address ?? existing.address,
             subTotal,
             cgstRate,
             sgstRate,
@@ -234,7 +260,7 @@ export class OrderService {
         const updated = await this.prisma.order.update({
             where: { id },
             data: updateData,
-            include: { items: true, payments: true, history: true },
+            include: { customer: true, items: true, payments: true, history: true },
         });
 
         return updated;

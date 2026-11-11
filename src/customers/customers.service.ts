@@ -130,6 +130,16 @@ export class CustomersService {
             );
         }
 
+        const linkedOrder = await this.prisma.order.findFirst({
+            where: { customerId: id },
+            select: { id: true },
+        });
+        if (linkedOrder) {
+            throw new ConflictException(
+                'This customer has orders and cannot be deleted. Deactivate the customer instead.',
+            );
+        }
+
         await this.prisma.customer.delete({
             where: { id },
         });
