@@ -10,10 +10,6 @@ import { Transform } from 'class-transformer';
 export class CreateCustomerDto {
     @IsString()
     @IsNotEmpty()
-    customer_id: string;
-
-    @IsString()
-    @IsNotEmpty()
     name: string;
 
     @IsString()

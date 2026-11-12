@@ -60,6 +60,11 @@ model Customer {
   orders          Order[]
 }
 
+model CustomerSequence {
+  id       String @id @map("_id")
+  sequence Int
+}
+
 enum OrderStatus {
   NEW
   PARTIAL_PAID

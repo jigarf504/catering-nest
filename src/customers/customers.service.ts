@@ -15,24 +15,51 @@ export class CustomersService {
 
     /**
      * Create a new customer.
-     * Prevents duplicate customer IDs.
+     * Customer IDs are allocated from a persistent sequence.
      */
     async create(createCustomerDto: CreateCustomerDto) {
-        const existing = await this.prisma.customer.findUnique({
-            where: {
-                customer_id: createCustomerDto.customer_id,
+        return this.prisma.customer.create({
+            data: {
+                ...createCustomerDto,
+                customer_id: await this.nextCustomerId(),
             },
         });
+    }
 
-        if (existing) {
-            throw new ConflictException(
-                `A customer with ID "${createCustomerDto.customer_id}" already exists`,
-            );
+    private async nextCustomerId(): Promise<string> {
+        const sequenceId = 'customers';
+
+        try {
+            const counter = await this.prisma.customerSequence.update({
+                where: { id: sequenceId },
+                data: { sequence: { increment: 1 } },
+            });
+            return `CUST-${String(counter.sequence).padStart(3, '0')}`;
+        } catch (error: any) {
+            if (error?.code !== 'P2025') throw error;
         }
 
-        return this.prisma.customer.create({
-            data: createCustomerDto,
+        const existingCustomers = await this.prisma.customer.findMany({
+            select: { customer_id: true },
         });
+        const maxExistingId = existingCustomers.reduce((max, customer) => {
+            const match = /^CUST-(\d+)$/i.exec(customer.customer_id);
+            return match ? Math.max(max, Number(match[1])) : max;
+        }, 0);
+
+        try {
+            const counter = await this.prisma.customerSequence.create({
+                data: { id: sequenceId, sequence: maxExistingId + 1 },
+            });
+            return `CUST-${String(counter.sequence).padStart(3, '0')}`;
+        } catch (error: any) {
+            if (error?.code !== 'P2002') throw error;
+            const counter = await this.prisma.customerSequence.update({
+                where: { id: sequenceId },
+                data: { sequence: { increment: 1 } },
+            });
+            return `CUST-${String(counter.sequence).padStart(3, '0')}`;
+        }
     }
 
     /**
@@ -75,7 +102,7 @@ export class CustomersService {
 
     /**
      * Update a customer by ID.
-     * Prevents duplicate customer IDs if customer_id is changed.
+     * The generated customer ID is immutable.
      */
     async update(id: string, updateCustomerDto: UpdateCustomerDto) {
         this.validateObjectId(id);
@@ -88,24 +115,6 @@ export class CustomersService {
             throw new NotFoundException(
                 `Customer with ID "${id}" not found`,
             );
-        }
-
-        // Check customer ID conflict if customer_id is being changed
-        if (
-            updateCustomerDto.customer_id &&
-            updateCustomerDto.customer_id !== existing.customer_id
-        ) {
-            const customerIdTaken = await this.prisma.customer.findUnique({
-                where: {
-                    customer_id: updateCustomerDto.customer_id,
-                },
-            });
-
-            if (customerIdTaken) {
-                throw new ConflictException(
-                    `A customer with ID "${updateCustomerDto.customer_id}" already exists`,
-                );
-            }
         }
 
         return this.prisma.customer.update({
