@@ -66,6 +66,11 @@ enum OrderStatus {
   PAID
 }
 
+enum OrderType {
+  order
+  quotation
+}
+
 enum PaymentMode {
   CASH
   UPI
@@ -75,6 +80,9 @@ enum PaymentMode {
 model Order {
   id            String         @id @default(auto()) @map("_id") @db.ObjectId
   invoiceNumber String         @unique
+  order_type    OrderType?     @default(order)
+  order_date    DateTime?
+  advanceAmount Float?         @default(0)
 
   // Customer relation
   customerId    String         @db.ObjectId

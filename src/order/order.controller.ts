@@ -63,6 +63,17 @@ export class OrderController {
     }
 
     /**
+     * POST /api/orders/:id/confirm
+     * Admin-only: confirm an unconfirmed quotation and convert it to an order.
+     */
+    @Post(':id/confirm')
+    @Roles(Role.ADMIN)
+    @HttpCode(HttpStatus.OK)
+    confirmQuotation(@Param('id') id: string) {
+        return this.orderService.confirmQuotation(id);
+    }
+
+    /**
      * DELETE /api/orders/:id
      * Admin-only: delete an order.
      */

@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { AddPaymentDto } from './dto/add-payment.dto';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, OrderType } from '@prisma/client';
 
 @Injectable()
 export class OrderService {
@@ -16,14 +16,14 @@ export class OrderService {
     /**
      * Generate a unique invoice number: INV-YYYYMMDD-XXXX
      */
-    private async generateInvoiceNumber(): Promise<string> {
+    private async generateInvoiceNumber(orderType: 'order' | 'quotation' = 'order'): Promise<string> {
         const now = new Date();
         const dateStr =
             now.getFullYear().toString() +
             (now.getMonth() + 1).toString().padStart(2, '0') +
             now.getDate().toString().padStart(2, '0');
 
-        const prefix = `INV-${dateStr}-`;
+        const prefix = `${orderType === 'quotation' ? 'QUO' : 'INV'}-${dateStr}-`;
 
         // Find the last invoice of today to increment
         const lastOrder = await this.prisma.order.findFirst({
@@ -49,7 +49,10 @@ export class OrderService {
         cgstRate: number,
         sgstRate: number,
     ) {
-        const subTotal = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+        const subTotal = items.reduce(
+            (sum, item) => sum + parseFloat((item.qty * item.rate).toFixed(2)),
+            0,
+        );
         const cgstAmount = parseFloat(((subTotal * cgstRate) / 100).toFixed(2));
         const sgstAmount = parseFloat(((subTotal * sgstRate) / 100).toFixed(2));
         const totalAmount = parseFloat((subTotal + cgstAmount + sgstAmount).toFixed(2));
@@ -70,7 +73,8 @@ export class OrderService {
      * Create a new order with line items.
      */
     async create(dto: CreateOrderDto) {
-        const invoiceNumber = await this.generateInvoiceNumber();
+        const orderType = dto.order_type ?? 'order';
+        const invoiceNumber = await this.generateInvoiceNumber(orderType);
 
         // Validate customer exists
         const customer = await this.prisma.customer.findUnique({
@@ -89,9 +93,17 @@ export class OrderService {
             sgstRate,
         );
 
+        const advanceAmount = dto.advanceAmount ?? 0;
+        if (advanceAmount > totalAmount) {
+            throw new BadRequestException('Advance amount cannot exceed the order total');
+        }
+
         const order = await this.prisma.order.create({
             data: {
                 invoiceNumber,
+                order_type: orderType === 'quotation' ? OrderType.quotation : OrderType.order,
+                order_date: dto.order_date ? new Date(dto.order_date) : undefined,
+                advanceAmount,
                 customerId: dto.customerId,
                 customerName: dto.customerName ?? customer.name,
                 mobile: dto.mobile ?? customer.mobile_number,
@@ -104,7 +116,7 @@ export class OrderService {
                 sgstAmount,
                 totalAmount,
                 paidAmount: 0,
-                status: OrderStatus.NEW,
+                status: this.resolveStatus(advanceAmount, totalAmount),
                 items: {
                     create: dto.items.map((item) => ({
                         description: item.description,
@@ -116,7 +128,7 @@ export class OrderService {
                 history: {
                     create: {
                         action: 'CREATED',
-                        description: `Invoice ${invoiceNumber} created. Total: ₹${totalAmount}`,
+                        description: `${orderType === 'quotation' ? 'Quotation' : 'Order'} ${invoiceNumber} created. Total: ₹${totalAmount}. Advance: ₹${advanceAmount}`,
                     },
                 },
             },
@@ -207,7 +219,11 @@ export class OrderService {
             sgstRate,
         );
 
-        const status = this.resolveStatus(existing.paidAmount, totalAmount);
+        const advanceAmount = dto.advanceAmount ?? existing.advanceAmount ?? 0;
+        if (advanceAmount + existing.paidAmount > totalAmount) {
+            throw new BadRequestException('Advance and recorded payments cannot exceed the order total');
+        }
+        const status = this.resolveStatus(existing.paidAmount + advanceAmount, totalAmount);
 
         const changes: string[] = [];
         if (dto.customerId && dto.customerId !== existing.customerId)
@@ -217,11 +233,17 @@ export class OrderService {
             changes.push(`CGST: ${existing.cgstRate}% → ${dto.cgstRate}%`);
         if (dto.sgstRate !== undefined && dto.sgstRate !== existing.sgstRate)
             changes.push(`SGST: ${existing.sgstRate}% → ${dto.sgstRate}%`);
+        if (dto.order_date !== undefined && dto.order_date !== existing.order_date?.toISOString().slice(0, 10))
+            changes.push(`Date updated to ${dto.order_date}`);
+        if (dto.advanceAmount !== undefined && dto.advanceAmount !== existing.advanceAmount)
+            changes.push(`Advance: ₹${existing.advanceAmount} → ₹${dto.advanceAmount}`);
         if (totalAmount !== existing.totalAmount)
             changes.push(`Total: ₹${existing.totalAmount} → ₹${totalAmount}`);
 
         const updateData: any = {
             customerId: dto.customerId ?? existing.customerId,
+            order_date: dto.order_date ? new Date(dto.order_date) : existing.order_date,
+            advanceAmount,
             customerName: dto.customerName ?? existing.customerName,
             mobile: dto.mobile ?? existing.mobile,
             mobile2: dto.mobile2 ?? existing.mobile2,
@@ -266,6 +288,33 @@ export class OrderService {
         return updated;
     }
 
+    /** Convert an unconfirmed quotation into an order. */
+    async confirmQuotation(id: string) {
+        this.validateObjectId(id);
+
+        const existing = await this.prisma.order.findUnique({ where: { id } });
+        if (!existing) {
+            throw new NotFoundException(`Order with ID "${id}" not found`);
+        }
+        if (existing.order_type !== OrderType.quotation) {
+            throw new BadRequestException('Only an unconfirmed quotation can be confirmed');
+        }
+
+        return this.prisma.order.update({
+            where: { id },
+            data: {
+                order_type: OrderType.order,
+                history: {
+                    create: {
+                        action: 'QUOTATION_CONFIRMED',
+                        description: `Quotation ${existing.invoiceNumber} confirmed as an order.`,
+                    },
+                },
+            },
+            include: { customer: true, items: true, payments: true, history: true },
+        });
+    }
+
     /**
      * Delete an order and all related data (cascade).
      */
@@ -297,8 +346,11 @@ export class OrderService {
         if (!order) {
             throw new NotFoundException(`Order with ID "${orderId}" not found`);
         }
+        if (order.order_type === OrderType.quotation) {
+            throw new BadRequestException('Confirm this quotation before recording a payment');
+        }
 
-        const remaining = parseFloat((order.totalAmount - order.paidAmount).toFixed(2));
+        const remaining = parseFloat((order.totalAmount - order.paidAmount - (order.advanceAmount ?? 0)).toFixed(2));
         if (dto.amount > remaining) {
             throw new BadRequestException(
                 `Payment amount ₹${dto.amount} exceeds remaining balance ₹${remaining}`,
@@ -306,7 +358,7 @@ export class OrderService {
         }
 
         const newPaidAmount = parseFloat((order.paidAmount + dto.amount).toFixed(2));
-        const newStatus = this.resolveStatus(newPaidAmount, order.totalAmount);
+        const newStatus = this.resolveStatus(newPaidAmount + (order.advanceAmount ?? 0), order.totalAmount);
 
         // Create payment + update order + log history in one operation
         const payment = await this.prisma.payment.create({
@@ -325,7 +377,7 @@ export class OrderService {
         const historyEntries: { action: string; description: string }[] = [
             {
                 action: 'PAYMENT_ADDED',
-                description: `Payment of ₹${dto.amount} received via ${dto.mode}${dto.chequeNumber ? ` (Cheque: ${dto.chequeNumber})` : ''}. Paid: ₹${newPaidAmount} / ₹${order.totalAmount}`,
+                description: `Payment of ₹${dto.amount} received via ${dto.mode}${dto.chequeNumber ? ` (Cheque: ${dto.chequeNumber})` : ''}. Paid: ₹${newPaidAmount + (order.advanceAmount ?? 0)} / ₹${order.totalAmount}`,
             },
         ];
 

@@ -8,6 +8,8 @@ import {
     Min,
     MaxLength,
     IsMongoId,
+    IsIn,
+    IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -29,6 +31,20 @@ export class CreateOrderItemDto {
 }
 
 export class CreateOrderDto {
+    @IsIn(['order', 'quotation'])
+    @IsOptional()
+    order_type?: 'order' | 'quotation';
+
+    @IsDateString()
+    @IsOptional()
+    order_date?: string;
+
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0)
+    @IsOptional()
+    advanceAmount?: number;
+
     @IsMongoId()
     @IsNotEmpty()
     customerId: string;
